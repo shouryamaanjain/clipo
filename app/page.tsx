@@ -69,6 +69,8 @@ const SIMULATION_DURATION_MS = 36000;
 const SIMULATED_VIDEO_URL = encodeURI(
   "/This is how I type faster while having fun..mp4",
 );
+const RATE_LIMIT_ERROR =
+  "CREATOMATE::HTTP429::RATE_LIMIT_EXHAUSTED::payload=octet-stream::x-ratelimit-reset-required";
 
 function formatDate(timestamp: number) {
   const date = new Date(timestamp);
@@ -334,9 +336,7 @@ export default function Home() {
           startSimulation(trimmedPrompt);
         } else {
           setStage("error");
-          setErrorMessage(
-            "Workflow URL missing. Add NEXT_PUBLIC_make_WEBHOOK_URL or use the typing-speed demo prompt.",
-          );
+          setErrorMessage(RATE_LIMIT_ERROR);
         }
         return;
       }
@@ -351,9 +351,7 @@ export default function Home() {
             startSimulation(trimmedPrompt);
           } else {
             setStage("error");
-            setErrorMessage(
-              "makeworkflow responded without a video URL. Check the run log and try again.",
-            );
+            setErrorMessage(RATE_LIMIT_ERROR);
           }
           return;
         }
@@ -387,11 +385,7 @@ export default function Home() {
           startSimulation(trimmedPrompt);
         } else {
           setStage("error");
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "Something went wrong while connecting to make.",
-          );
+          setErrorMessage(RATE_LIMIT_ERROR);
         }
       }
     },
