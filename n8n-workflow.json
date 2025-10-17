@@ -1,0 +1,511 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-video",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "012039ba-52ab-478a-84fe-760a5ff60811",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        160
+      ],
+      "webhookId": "generate-video"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chatgpt-4o-latest",
+          "mode": "list",
+          "cachedResultName": "CHATGPT-4O-LATEST"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional video script writer. Create a scene-based script for a vertical short video (9:16 ratio) about the given topic. The video should be 30-60 seconds long. Return ONLY valid JSON with this structure:\n{\n  \"title\": \"Video Title\",\n  \"scenes\": [\n    {\n      \"sceneNumber\": 1,\n      \"duration\": 5,\n      \"narration\": \"Text for voiceover\",\n      \"keywords\": [\"keyword1\", \"keyword2\"],\n      \"visualDescription\": \"Description of what should be shown\"\n    }\n  ]\n}\nMake 5-8 scenes total.",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.body.topic }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 2000,
+          "temperature": 0.7
+        }
+      },
+      "id": "305ce011-0754-48aa-a0cf-c336b4ec10be",
+      "name": "GPT-4o Generate Script",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.3,
+      "position": [
+        1872,
+        160
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "IkqzPYkJ4B469fNE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse GPT-4o response and prepare data\nconst response = $input.first().json.message.content;\n\n// Remove markdown code blocks if present\nlet jsonStr = response;\nif (response.includes('```json')) {\n  jsonStr = response.split('```json')[1].split('```')[0].trim();\n} else if (response.includes('```')) {\n  jsonStr = response.split('```')[1].split('```')[0].trim();\n}\n\nconst scriptData = JSON.parse(jsonStr);\n\n// Combine all narrations for voiceover\nconst fullNarration = scriptData.scenes\n  .map(s => s.narration)\n  .join(' ');\n\n// Return structured data\nreturn {\n  json: {\n    title: scriptData.title,\n    fullNarration: fullNarration,\n    scenes: scriptData.scenes,\n    totalScenes: scriptData.scenes.length,\n    originalTopic: $('Webhook').first().json.body.topic\n  }\n};"
+      },
+      "id": "747f68c4-3d7c-4de6-8f71-43156f18e298",
+      "name": "Parse Script",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "voiceover-text",
+              "name": "text",
+              "value": "={{ $json.fullNarration }}",
+              "type": "string"
+            },
+            {
+              "id": "voice-description",
+              "name": "voice_description",
+              "value": "Professional, clear, and engaging narrator voice with a warm and friendly tone, suitable for educational content",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d54ee45a-412e-47aa-88fe-74c22c39f047",
+      "name": "Prepare Hume AI",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        2400,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hume.ai/v0/tts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  utterances: [{\n    text: $json.text,\n    description: $json.voice_description\n  }],\n  format: {\n    type: 'mp3'\n  },\n  num_generations: 1\n}) }}",
+        "options": {}
+      },
+      "id": "81e57866-61c7-4af1-81da-cd398ff88848",
+      "name": "Hume AI Generate Voiceover",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2608,
+        160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EBW0toekptMpCt1Z",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract base64 audio from Hume AI response\nconst humeResponse = $input.first().json;\nconst base64Audio = humeResponse.generations[0].audio;\n\n// Store base64 audio in JSON for later use\nreturn {\n  json: {\n    generation_id: humeResponse.generations[0].generation_id,\n    duration: humeResponse.generations[0].duration,\n    file_size: humeResponse.generations[0].file_size,\n    audioBase64: base64Audio,\n    audioDataUrl: `data:audio/mpeg;base64,${base64Audio}`\n  }\n};"
+      },
+      "id": "60afa4c4-82d3-406d-864b-55422a85c3ba",
+      "name": "Extract Hume Audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "1a9a6c0b-69e6-4973-8593-df5c5bfcab29",
+      "name": "Loop Over Scenes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3056,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pexels.com/videos/search?query={{ encodeURIComponent($json.scenes[$('Loop Over Scenes').itemMatches(0)[0].json.batchIndex].keywords.join(' ')) }}&per_page=1&orientation=portrait",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "f6c439b7-8cf6-4052-81bc-c788387db858",
+      "name": "Fetch Pexels Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3280,
+        160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "IKFGKYQo7jMPQSwY",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect video URLs and prepare for Creatomate\nconst items = $input.all();\nconst parsedScript = $('Parse Script').first().json;\n\n// Extract video URLs from Pexels responses\nconst videoClips = items.map((item, index) => {\n  const pexelsData = item.json;\n  \n  // Find the best video file - prefer HD portrait\n  let videoUrl = null;\n  if (pexelsData.videos && pexelsData.videos.length > 0) {\n    const video = pexelsData.videos[0];\n    if (video.video_files && video.video_files.length > 0) {\n      // Try to find HD portrait video\n      const hdPortrait = video.video_files.find(file => \n        file.quality === 'hd' && file.width < file.height\n      );\n      // Fallback to any HD video\n      const hdVideo = video.video_files.find(file => file.quality === 'hd');\n      // Last resort: any video\n      videoUrl = (hdPortrait || hdVideo || video.video_files[0]).link;\n    }\n  }\n  \n  const scene = parsedScript.scenes[index];\n  \n  return {\n    sceneNumber: scene.sceneNumber,\n    videoUrl: videoUrl,\n    duration: scene.duration,\n    narration: scene.narration,\n    caption: scene.narration\n  };\n});\n\n// Get audio data URL from Hume AI\nconst audioData = $('Extract Hume Audio').first().json;\nconst audioUrl = audioData.audioDataUrl;\n\nreturn {\n  json: {\n    title: parsedScript.title,\n    topic: parsedScript.originalTopic,\n    videoClips: videoClips,\n    audioUrl: audioUrl,\n    totalDuration: videoClips.reduce((sum, clip) => sum + clip.duration, 0)\n  }\n};"
+      },
+      "id": "1e4e0ca5-9257-4139-b4c2-df62657c184d",
+      "name": "Prepare Creatomate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3488,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.creatomate.com/v2/renders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  template_id: 'c7b8df98-6706-4b90-969f-657bffdc54e1',\n  modifications: {\n    'Music.source': $json.audioUrl,\n    'Background-1.source': $json.videoClips[0]?.videoUrl,\n    'Text-1.text': $json.videoClips[0]?.caption,\n    'Background-2.source': $json.videoClips[1]?.videoUrl,\n    'Text-2.text': $json.videoClips[1]?.caption,\n    'Background-3.source': $json.videoClips[2]?.videoUrl,\n    'Text-3.text': $json.videoClips[2]?.caption,\n    'Background-4.source': $json.videoClips[3]?.videoUrl,\n    'Text-4.text': $json.videoClips[3]?.caption\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "144a09b9-df9c-4843-a9ff-932d304a3686",
+      "name": "Creatomate Render Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3712,
+        160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dxyrZR556EGY51vl",
+          "name": "Header Auth account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Poll Creatomate for render status\nconst renderId = $input.first().json.id;\n\nreturn {\n  json: {\n    renderId: renderId,\n    statusUrl: `https://api.creatomate.com/v2/renders/${renderId}`,\n    pollInterval: 5000\n  }\n};"
+      },
+      "id": "fd748582-3f47-4516-811f-59f42b23ce74",
+      "name": "Get Render Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3936,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.statusUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "c1ffbe3e-7af9-48c2-9e84-8402cd879645",
+      "name": "Poll Render Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4160,
+        160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dxyrZR556EGY51vl",
+          "name": "Header Auth account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "render-complete",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "succeeded",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "603ab56f-428e-442e-bf70-282d28f06304",
+      "name": "Check if Render Complete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4368,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "45eaa210-4ee0-49b7-a2c4-41f0378abbca",
+      "name": "Wait 5 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4368,
+        352
+      ],
+      "webhookId": "579ea01d-c3b4-4a22-8620-cd62c6620897"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\\n  success: true,\\n  videoUrl: $json.url,\\n  thumbnailUrl: $json.snapshot_url,\\n  title: $('Parse Script').first().json.title,\\n  topic: $('Parse Script').first().json.originalTopic,\\n  duration: $json.duration,\\n  renderId: $json.id,\\n  narration: $('Parse Script').first().json.fullNarration,\\n  scenes: $('Parse Script').first().json.scenes,\\n  audioUrl: $('Extract Hume Audio').first().json.audioDataUrl,\\n  videoClips: $('Prepare Creatomate Data').first().json.videoClips\\n}) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ce99e9e9-c084-485e-a066-0c29542d7f1d",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4592,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "GPT-4o Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Generate Script": {
+      "main": [
+        [
+          {
+            "node": "Parse Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script": {
+      "main": [
+        [
+          {
+            "node": "Prepare Hume AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Hume AI": {
+      "main": [
+        [
+          {
+            "node": "Hume AI Generate Voiceover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hume AI Generate Voiceover": {
+      "main": [
+        [
+          {
+            "node": "Extract Hume Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Hume Audio": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Scenes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pexels Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Creatomate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Pexels Video": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Creatomate Data": {
+      "main": [
+        [
+          {
+            "node": "Creatomate Render Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate Render Video": {
+      "main": [
+        [
+          {
+            "node": "Get Render Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Render Status": {
+      "main": [
+        [
+          {
+            "node": "Poll Render Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Render Status": {
+      "main": [
+        [
+          {
+            "node": "Check if Render Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Render Complete": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 5 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Poll Render Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d94f58bb59ae4ee7bccb4702c074519087d848591dc7c063c7daea4e8623d2d2"
+  }
+}

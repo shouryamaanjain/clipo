@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Clipo — AI Short Video Studio
 
-## Getting Started
+A design-forward web experience for generating AI-powered short videos. The front-end hands your brief to an makeworkflow and hosts the finished clip the moment makereturns a `videoUrl`. When the backend is offline, the app simulates the journey and surfaces a sample typing-speed clip so you can still demo the UX end-to-end.
 
-First, run the development server:
+## Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js 18+
+- An makewebhook workflow (see `n8n-workflow.json`) that accepts `{ "topic": string }` and responds with JSON containing at least `{ "videoUrl": string }`. Optional fields like `thumbnailUrl`, `narration`, `scenes`, `audioUrl`, and `videoClips` are also consumed by the UI when present.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Quick start
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Create an `.env.local` file in the project root:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```env
+   NEXT_PUBLIC_N8N_WEBHOOK_URL=https://your-n8n-instance/webhook/generate-video
+   ```
 
-## Learn More
+2. Install dependencies (if you haven’t already):
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   npm install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Launch the development server:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+4. Visit [http://localhost:3000](http://localhost:3000) and start crafting prompts. The UI posts `{ topic: "..." }` to your webhook.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Runtime behaviour
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Compose** – Write or pick a curated topic describing tone, length, ratio, music, or voice direction.
+- **Generate** – If the webhook responds, the app shows real progress and renders your returned video. If the webhook is unreachable **only for the prompt** `Create a Short video on how to type fast`, a simulated loader runs for ~36 seconds, then plays the bundled vertical sample video (`public/This is how I type faster while having fun..mp4`) labelled as a preview.
+- **Deliver** – Successful runs append the newest clip (and optional metadata) to the gallery with a playable player and timestamp.
+
+## Customisation tips
+
+- Adjust the payload in `app/page.tsx` if your workflow expects more fields (e.g., `voice`, `ratio`, `brandPalette`).
+- Map additional response metadata (thumbnails, captions, scenes) into the gallery cards for deeper context.
+- Extend the simulation helper if you want multiple fallback clips or shorter demo timings.
+
+## Deployment
+
+Deploy anywhere that supports Next.js. Set `NEXT_PUBLIC_N8N_WEBHOOK_URL` in your hosting provider, keep the makewebhook behind HTTPS, and ensure it returns JSON matching the structure outlined above.
+
+---
+
+Need extra automation? Layer on status polling, asset persistence, or webhook signatures directly in the makeworkflow — the UI is already wired to showcase the results.
